@@ -6,7 +6,7 @@ pipeline {
     }
     environment {
         SCANNER_HOME = tool 'sonar-scanner'
-        NVD_API_KEY = credentials('nvd-api-key') // Use a Jenkins credential ID
+        NVD_API_KEY = credentials('nvd-api-key') // Use the credential ID you created
     }
     stages {
         stage("Clean Workspace") {
@@ -44,9 +44,15 @@ pipeline {
         }
         stage("OWASP Dependency Check") {
             steps {
-                withEnv(["NVD_API_KEY=${NVD_API_KEY}"]) { // Pass the key as an environment variable
-                    dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit --update -Dsonar.nvd.api.key=$NVD_API_KEY', odcInstallation: 'DP-Check'
-                    dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+                withEnv(["NVD_API_KEY=${NVD_API_KEY}"]) {
+                    script {
+                        // Ensure the reports directory exists
+                        sh 'mkdir -p reports'
+                        // Run dependency check with explicit output directory and debug logging
+                        dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit --update -Dsonar.nvd.api.key=$NVD_API_KEY -Dsonar.outputDirectory=reports -Dsonar.log.level=DEBUG', odcInstallation: 'DP-Check'
+                    }
+                    // Publish the report with the specific path
+                    dependencyCheckPublisher pattern: 'reports/dependency-check-report.xml'
                 }
             }
         }
