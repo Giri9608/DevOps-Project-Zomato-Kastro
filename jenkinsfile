@@ -6,6 +6,7 @@ pipeline {
     }
     environment {
         SCANNER_HOME = tool 'sonar-scanner'
+        NVD_API_KEY = credentials('nvd-api-key') // Use a Jenkins credential ID
     }
     stages {
         stage("Clean Workspace") {
@@ -43,8 +44,10 @@ pipeline {
         }
         stage("OWASP Dependency Check") {
             steps {
-                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit --update -n', odcInstallation: 'DP-Check'
-                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+                withEnv(["NVD_API_KEY=${NVD_API_KEY}"]) { // Pass the key as an environment variable
+                    dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit --update -Dsonar.nvd.api.key=$NVD_API_KEY', odcInstallation: 'DP-Check'
+                    dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+                }
             }
         }
         stage("Trivy File Scan") {
@@ -80,7 +83,11 @@ pipeline {
         }
         stage("Deploy to Container") {
             steps {
-                sh 'docker run -d --name zomato -p 3000:3000 giri8608/zomato:latest'
+                sh '''
+                    # Stop and remove any existing container
+                    docker rm -f zomato || true
+                    docker run -d --name zomato -p 3000:3000 giri8608/zomato:latest
+                '''
             }
         }
     }
@@ -111,4 +118,3 @@ pipeline {
         }
     }
 }
-
