@@ -6,7 +6,7 @@ pipeline {
     }
     environment {
         SCANNER_HOME = tool 'sonar-scanner'
-        NVD_API_KEY = credentials('nvd-api-key') // Use the credential ID you created
+        NVD_API_KEY = credentials('nvd-api-key') // Matches your credential ID
     }
     stages {
         stage("Clean Workspace") {
@@ -48,8 +48,8 @@ pipeline {
                     script {
                         // Ensure the reports directory exists
                         sh 'mkdir -p reports'
-                        // Run dependency check with explicit output directory and debug logging
-                        dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit --update -Dsonar.nvd.api.key=$NVD_API_KEY -Dsonar.outputDirectory=reports -Dsonar.log.level=DEBUG', odcInstallation: 'DP-Check'
+                        // Run dependency check with corrected arguments and verbose logging
+                        dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit --update -D nvd.api.key=$NVD_API_KEY -D nvd.datafeed.update.only=true -D reportFormat=XML -D outputDirectory=reports --log=DEBUG', odcInstallation: 'DP-Check'
                     }
                     // Publish the report with the specific path
                     dependencyCheckPublisher pattern: 'reports/dependency-check-report.xml'
