@@ -5,33 +5,29 @@ pipeline {
         nodejs 'node24'
     }
     environment {
-        SCANNER_HOME = tool 'sonar-scanner'
-        NVD_API_KEY = credentials('nvd-api-key') // Matches your credential ID
+        SCANNER_HOME=tool 'sonar-scanner'
     }
     stages {
-        stage("Clean Workspace") {
+        stage ("clean workspace") {
             steps {
                 cleanWs()
             }
         }
-        stage("Git Checkout") {
+        stage ("Git Checkout") {
             steps {
                 git 'https://github.com/Giri9608/DevOps-Project-Zomato-Kastro.git'
             }
         }
-        stage("Sonarqube Analysis") {
-            steps {
+        stage("Sonarqube Analysis"){
+            steps{
                 withSonarQubeEnv('sonar-server') {
-                    sh '''
-                        $SCANNER_HOME/bin/sonar-scanner \
-                        -Dsonar.projectName=zomato \
-                        -Dsonar.projectKey=zomato
-                    '''
+                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=zomato \
+                    -Dsonar.projectKey=zomato '''
                 }
             }
         }
-        stage("Code Quality Gate") {
-            steps {
+        stage("Code Quality Gate"){
+           steps {
                 script {
                     waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token'
                 }
@@ -39,68 +35,60 @@ pipeline {
         }
         stage("Install NPM Dependencies") {
             steps {
-                sh 'npm install'
+                sh "npm install"
             }
         }
-        stage("OWASP Dependency Check") {
+        stage('OWASP FS SCAN') {
             steps {
-                withEnv(["NVD_API_KEY=${NVD_API_KEY}"]) {
-                    script {
-                        // Ensure the reports directory exists
-                        sh 'mkdir -p reports'
-                        // Run dependency check with corrected arguments and verbose logging
-                        dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit --update -D nvd.api.key=$NVD_API_KEY -D nvd.datafeed.update.only=true -D reportFormat=XML -D outputDirectory=reports --log=DEBUG', odcInstallation: 'DP-Check'
+                script {
+                    withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
+                        dependencyCheck additionalArguments: "--scan ./ --disableYarnAudit --disableNodeAudit --nvdApiKey ${NVD_API_KEY} -n",
+                                       odcInstallation: 'DP-Check'
+                        dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
                     }
-                    // Publish the report with the specific path
-                    dependencyCheckPublisher pattern: 'reports/dependency-check-report.xml'
                 }
             }
         }
-        stage("Trivy File Scan") {
+        stage ("Trivy File Scan") {
             steps {
-                sh 'trivy fs . > trivy.txt'
+                sh "trivy fs . > trivy.txt"
             }
         }
-        stage("Build Docker Image") {
+        stage ("Build Docker Image") {
             steps {
-                sh 'docker build -t zomato .'
+                sh "docker build -t zomato ."
             }
         }
-        stage("Tag & Push to DockerHub") {
+        stage ("Tag & Push to DockerHub") {
             steps {
                 script {
                     withDockerRegistry(credentialsId: 'docker') {
-                        sh 'docker tag zomato giri8608/zomato:latest'
-                        sh 'docker push giri8608/zomato:latest'
+                        sh "docker tag zomato giri8608/zomato:latest "
+                        sh "docker push giri8608/zomato:latest "
                     }
                 }
             }
         }
-        stage("Docker Scout Image Analysis") {
+        stage('Docker Scout Image') {
             steps {
-                script {
-                    withDockerRegistry(credentialsId: 'docker') {
-                        sh 'docker-scout quickview giri8608/zomato:latest'
-                        sh 'docker-scout cves giri8608/zomato:latest'
-                        sh 'docker-scout recommendations giri8608/zomato:latest'
-                    }
+                script{
+                   withDockerRegistry(credentialsId: 'docker', toolName: 'docker'){
+                       sh 'docker-scout quickview giri8608/zomato:latest'
+                       sh 'docker-scout cves giri8608/zomato:latest'
+                       sh 'docker-scout recommendations giri8608/zomato:latest'
+                   }
                 }
             }
         }
-        stage("Deploy to Container") {
+        stage ("Deploy to Container") {
             steps {
-                sh '''
-                    # Stop and remove any existing container
-                    docker rm -f zomato || true
-                    docker run -d --name zomato -p 3000:3000 giri8608/zomato:latest
-                '''
+                sh 'docker run -d --name zomato -p 3000:3000 giri8608/zomato:latest'
             }
         }
     }
     post {
         always {
-            emailext (
-                attachLog: true,
+            emailext attachLog: true,
                 subject: "'${currentBuild.result}'",
                 body: """
                     <html>
@@ -120,7 +108,6 @@ pipeline {
                 to: 'giridharan9608@gmail.com',
                 mimeType: 'text/html',
                 attachmentsPattern: 'trivy.txt'
-            )
         }
     }
 }
