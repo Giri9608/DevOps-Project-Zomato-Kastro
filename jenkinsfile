@@ -40,12 +40,8 @@ pipeline {
         }
         stage('OWASP FS SCAN') {
             steps {
-                script {
-                    withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
-                        dependencyCheck additionalArguments: "--scan ./ --disableYarnAudit --disableNodeAudit --nvdApiKey ${NVD_API_KEY} --update -n", odcInstallation: 'DP-Check'
-                        dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
-                    }
-                }
+                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit --update -n', odcInstallation: 'DP-Check'
+                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
             }
         }
         stage ("Trivy File Scan") {
@@ -81,13 +77,7 @@ pipeline {
         }
         stage ("Deploy to Container") {
             steps {
-                script {
-                    sh '''
-                        docker stop zomato || true
-                        docker rm zomato || true
-                        docker run -d --name zomato -p 3000:3000 giri8608/zomato:latest
-                    '''
-                }
+                sh 'docker run -d --name zomato -p 3000:3000 giri8608/zomato:latest'
             }
         }
     }
