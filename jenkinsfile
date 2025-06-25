@@ -21,8 +21,12 @@ pipeline {
         stage("Sonarqube Analysis"){
             steps{
                 withSonarQubeEnv('sonar-server') {
-                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=zomato \
-                    -Dsonar.projectKey=zomato '''
+                    sh ''' $SCANNER_HOME/bin/sonar-scanner \
+                    -Dsonar.projectName=zomato \
+                    -Dsonar.projectKey=zomato \
+                    -Dsonar.sources=. \
+                    -Dsonar.host.url=$SONAR_HOST_URL \
+                    -Dsonar.login=$SONAR_AUTH_TOKEN '''
                 }
             }
         }
@@ -40,8 +44,21 @@ pipeline {
         }
         stage('OWASP FS SCAN') {
             steps {
-                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit --update -n', odcInstallation: 'DP-Check'
-                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+                script {
+                    withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
+                        dependencyCheck additionalArguments: '''--scan ./
+                                                               --disableYarnAudit
+                                                               --disableNodeAudit
+                                                               --nvdApiKey ${NVD_API_KEY}
+                                                               --format XML
+                                                               --format HTML
+                                                               --out ./dependency-check-report
+                                                               --project zomato
+                                                               -n''',
+                                       odcInstallation: 'DP-Check'
+                        dependencyCheckPublisher pattern: 'dependency-check-report.xml'
+                    }
+                }
             }
         }
         stage ("Trivy File Scan") {
@@ -77,14 +94,21 @@ pipeline {
         }
         stage ("Deploy to Container") {
             steps {
-                sh 'docker run -d --name zomato -p 3000:3000 giri8608/zomato:latest'
+                script {
+                    sh '''
+                        docker stop zomato || true
+                        docker rm zomato || true
+                        docker run -d --name zomato -p 3000:3000 giri8608/zomato:latest
+                    '''
+                }
             }
         }
     }
     post {
         always {
+            archiveArtifacts artifacts: 'trivy.txt,dependency-check-report.*', allowEmptyArchive: true
             emailext attachLog: true,
-                subject: "'${currentBuild.result}'",
+                subject: "'${currentBuild.result}' - Zomato Pipeline Build #${env.BUILD_NUMBER}",
                 body: """
                     <html>
                     <body>
@@ -106,6 +130,8 @@ pipeline {
         }
     }
 }
+
+
 
 
 
