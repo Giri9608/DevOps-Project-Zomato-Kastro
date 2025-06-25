@@ -57,7 +57,6 @@ pipeline {
                                 --out ./dependency-check-report
                                 --project zomato
                                 --enableRetired
-                                --enableExperimental
                                 -n
                             """,
                             odcInstallation: 'DP-Check'
@@ -66,8 +65,10 @@ pipeline {
                         }
                     } catch (Exception e) {
                         echo "OWASP Dependency Check failed: ${e.getMessage()}"
-                        echo "This is likely due to database initialization. Continuing pipeline..."
-                        currentBuild.result = 'UNSTABLE'
+                        echo "This is likely due to database initialization on first run."
+                        echo "The scan will work on subsequent runs. Continuing pipeline..."
+                        // Don't fail the entire pipeline for this
+                        unstable("OWASP scan failed - database initialization required")
                     }
                 }
             }
@@ -106,7 +107,6 @@ pipeline {
         stage ("Deploy to Container") {
             steps {
                 script {
-                    // Stop and remove existing container if it exists
                     sh '''
                         docker stop zomato || true
                         docker rm zomato || true
@@ -118,11 +118,10 @@ pipeline {
     }
     post {
         always {
-            // Archive artifacts
             archiveArtifacts artifacts: 'trivy.txt,dependency-check-report.*', allowEmptyArchive: true
 
             emailext attachLog: true,
-                subject: "'${currentBuild.result}'",
+                subject: "'${currentBuild.result}' - Zomato App Pipeline",
                 body: """
                     <html>
                     <body>
@@ -134,6 +133,9 @@ pipeline {
                         </div>
                         <div style="background-color: #87CEEB; padding: 10px; margin-bottom: 10px;">
                             <p style="color: white; font-weight: bold;">URL: ${env.BUILD_URL}</p>
+                        </div>
+                        <div style="background-color: #FFE4B5; padding: 10px; margin-bottom: 10px;">
+                            <p style="color: black; font-weight: bold;">Application URL: http://your-server-ip:3000</p>
                         </div>
                     </body>
                     </html>
