@@ -21,19 +21,15 @@ pipeline {
         stage("Sonarqube Analysis"){
             steps{
                 withSonarQubeEnv('sonar-server') {
-                    sh ''' $SCANNER_HOME/bin/sonar-scanner \
-                    -Dsonar.projectName=zomato \
-                    -Dsonar.projectKey=zomato \
-                    -Dsonar.sources=. \
-                    -Dsonar.host.url=$SONAR_HOST_URL \
-                    -Dsonar.login=$SONAR_AUTH_TOKEN '''
+                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=zomato \
+                    -Dsonar.projectKey=zomato '''
                 }
             }
         }
         stage("Code Quality Gate"){
            steps {
                 script {
-                    waitForQualityGate abortPipeline: false, credentialsId: 'sonar-auth-token'
+                    waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token'
                 }
             }
         }
@@ -45,56 +41,9 @@ pipeline {
         stage('OWASP FS SCAN') {
             steps {
                 script {
-                    try {
-                        // First, try to run with NVD API key and allow database update
-                        withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
-                            dependencyCheck additionalArguments: """
-                                --scan ./
-                                --disableYarnAudit
-                                --disableNodeAudit
-                                --nvdApiKey ${NVD_API_KEY}
-                                --format XML
-                                --format HTML
-                                --out ./dependency-check-report
-                                --project zomato
-                                --enableRetired
-                                --nvdMaxRetryCount 3
-                                --nvdDelay 2000
-                                -n
-                            """,
-                            odcInstallation: 'DP-Check'
-
-                            dependencyCheckPublisher pattern: 'dependency-check-report.xml'
-                        }
-                        echo "OWASP Dependency Check completed successfully"
-                    } catch (Exception e) {
-                        echo "OWASP Dependency Check with NVD API failed: ${e.getMessage()}"
-                        echo "Attempting fallback scan without NVD updates..."
-
-                        try {
-                            // Fallback: Run without NVD updates
-                            dependencyCheck additionalArguments: """
-                                --scan ./
-                                --disableYarnAudit
-                                --disableNodeAudit
-                                --noupdate
-                                --format XML
-                                --format HTML
-                                --out ./dependency-check-report
-                                --project zomato
-                                -n
-                            """,
-                            odcInstallation: 'DP-Check'
-
-                            dependencyCheckPublisher pattern: 'dependency-check-report.xml'
-                            echo "OWASP Dependency Check completed with local database"
-                        } catch (Exception e2) {
-                            echo "OWASP Dependency Check failed completely: ${e2.getMessage()}"
-                            echo "This is expected on first run - database needs initialization"
-                            echo "Pipeline will continue. OWASP scan will work on subsequent runs."
-                            // Mark as unstable but don't fail the pipeline
-                            currentBuild.result = 'UNSTABLE'
-                        }
+                    withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
+                        dependencyCheck additionalArguments: "--scan ./ --disableYarnAudit --disableNodeAudit --nvdApiKey ${NVD_API_KEY} --update -n", odcInstallation: 'DP-Check'
+                        dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
                     }
                 }
             }
@@ -144,10 +93,8 @@ pipeline {
     }
     post {
         always {
-            archiveArtifacts artifacts: 'trivy.txt,dependency-check-report.*', allowEmptyArchive: true
-
             emailext attachLog: true,
-                subject: "'${currentBuild.result}' - Zomato App Pipeline Build #${env.BUILD_NUMBER}",
+                subject: "'${currentBuild.result}'",
                 body: """
                     <html>
                     <body>
@@ -160,19 +107,6 @@ pipeline {
                         <div style="background-color: #87CEEB; padding: 10px; margin-bottom: 10px;">
                             <p style="color: white; font-weight: bold;">URL: ${env.BUILD_URL}</p>
                         </div>
-                        <div style="background-color: #FFE4B5; padding: 10px; margin-bottom: 10px;">
-                            <p style="color: black; font-weight: bold;">🚀 Application Deployed Successfully!</p>
-                            <p style="color: black;">Access your Zomato app at: <strong>http://your-server-ip:3000</strong></p>
-                        </div>
-                        <div style="background-color: #F0F8FF; padding: 10px; margin-bottom: 10px;">
-                            <p style="color: black;"><strong>Pipeline Status:</strong></p>
-                            <p style="color: black;">✅ SonarQube Analysis: PASSED</p>
-                            <p style="color: black;">✅ Code Quality Gate: OK</p>
-                            <p style="color: black;">✅ Docker Build: SUCCESS</p>
-                            <p style="color: black;">✅ Docker Push: SUCCESS</p>
-                            <p style="color: black;">✅ Security Scan: COMPLETED</p>
-                            <p style="color: black;">✅ Deployment: SUCCESS</p>
-                        </div>
                     </body>
                     </html>
                 """,
@@ -180,16 +114,8 @@ pipeline {
                 mimeType: 'text/html',
                 attachmentsPattern: 'trivy.txt'
         }
-        success {
-            echo "🎉 Pipeline completed successfully! Your Zomato application is now deployed and running."
-        }
-        unstable {
-            echo "⚠️ Pipeline completed with warnings. Application is deployed but OWASP scan needs attention."
-        }
-        failure {
-            echo "❌ Pipeline failed. Please check the logs for details."
-        }
     }
 }
+
 
 
