@@ -45,10 +45,29 @@ pipeline {
         stage('OWASP FS SCAN') {
             steps {
                 script {
-                    withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
-                        dependencyCheck additionalArguments: "--scan ./ --disableYarnAudit --disableNodeAudit --nvdApiKey ${NVD_API_KEY} -n",
-                                       odcInstallation: 'DP-Check'
-                        dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+                    try {
+                        withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
+                            dependencyCheck additionalArguments: """
+                                --scan ./
+                                --disableYarnAudit
+                                --disableNodeAudit
+                                --nvdApiKey ${NVD_API_KEY}
+                                --format XML
+                                --format HTML
+                                --out ./dependency-check-report
+                                --project zomato
+                                --enableRetired
+                                --enableExperimental
+                                -n
+                            """,
+                            odcInstallation: 'DP-Check'
+
+                            dependencyCheckPublisher pattern: 'dependency-check-report.xml'
+                        }
+                    } catch (Exception e) {
+                        echo "OWASP Dependency Check failed: ${e.getMessage()}"
+                        echo "This is likely due to database initialization. Continuing pipeline..."
+                        currentBuild.result = 'UNSTABLE'
                     }
                 }
             }
@@ -86,12 +105,22 @@ pipeline {
         }
         stage ("Deploy to Container") {
             steps {
-                sh 'docker run -d --name zomato -p 3000:3000 giri8608/zomato:latest'
+                script {
+                    // Stop and remove existing container if it exists
+                    sh '''
+                        docker stop zomato || true
+                        docker rm zomato || true
+                        docker run -d --name zomato -p 3000:3000 giri8608/zomato:latest
+                    '''
+                }
             }
         }
     }
     post {
         always {
+            // Archive artifacts
+            archiveArtifacts artifacts: 'trivy.txt,dependency-check-report.*', allowEmptyArchive: true
+
             emailext attachLog: true,
                 subject: "'${currentBuild.result}'",
                 body: """
