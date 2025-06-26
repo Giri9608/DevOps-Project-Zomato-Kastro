@@ -49,8 +49,8 @@ pipeline {
                         --nvdApiKey $NVD_API_KEY \
                         --format XML \
                         --out . \
-                        --cveValidForHours 168 \
-                        --updateonly
+                        --project zomato \
+                        --noupdate
                     '''
                     dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
                 }
@@ -118,6 +118,7 @@ pipeline {
         }
     }
 }
+
 
 
 
