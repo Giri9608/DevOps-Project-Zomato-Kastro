@@ -6,7 +6,7 @@ pipeline {
     }
     environment {
         SCANNER_HOME = tool 'sonar-scanner'
-        NVD_API_KEY = credentials('nvd-api-key') // Store NVD API key in Jenkins credentials
+        NVD_API_KEY = credentials('nvd-api-key')
     }
     stages {
         stage("Clean Workspace") {
@@ -40,10 +40,23 @@ pipeline {
                 sh "npm install"
             }
         }
+        stage("Update Vulnerable Dependencies") {
+            steps {
+                script {
+                    // Update critical and high-severity dependencies identified by Docker Scout
+                    sh '''
+                        npm install webpack@5.76.0 @babel/traverse@7.23.2 path-to-regexp@0.1.12 \
+                        http-proxy-middleware@2.0.7 body-parser@1.20.3 semver@7.5.2 json5@1.0.2 \
+                        ws@8.17.1 braces@3.0.3 nth-check@2.0.1 rollup@2.79.2 webpack-dev-middleware@5.3.4 \
+                        cross-spawn@7.0.5 --save
+                    '''
+                }
+            }
+        }
         stage('OWASP FS SCAN') {
             steps {
                 dependencyCheck additionalArguments: "--scan ./ --disableYarnAudit --disableNodeAudit --update -n --nvdApiKey ${NVD_API_KEY}", odcInstallation: 'DP-Check'
-                dependencyCheckPublisher pattern: '**/dependency-check-report.xml', failedTotalCritical: 0, failedTotalHigh: 0, failedTotalLow: 10, failedTotalMedium: 5
+                dependencyCheckPublisher pattern: '**/dependency-check-report.xml', failedTotalCritical: 0, failedTotalHigh: 0, failedTotalMedium: 5, failedTotalLow: 10
             }
         }
         stage("Trivy File Scan") {
@@ -71,7 +84,14 @@ pipeline {
                 script {
                     withDockerRegistry(credentialsId: 'docker', toolName: 'docker') {
                         sh 'docker-scout quickview giri8608/zomato:latest'
-                        sh 'docker-scout cves giri8608/zomato:latest'
+                        sh '''
+                            docker-scout cves giri8608/zomato:latest > docker-scout-cves.txt
+                            if grep -q "CRITICAL" docker-scout-cves.txt; then
+                                echo "Critical vulnerabilities found. Please review docker-scout-cves.txt."
+                            else
+                                echo "No critical vulnerabilities found."
+                            fi
+                        '''
                         sh 'docker-scout recommendations giri8608/zomato:latest'
                     }
                 }
@@ -79,6 +99,7 @@ pipeline {
         }
         stage("Deploy to Container") {
             steps {
+                sh 'docker rm -f zomato || true'
                 sh 'docker run -d --name zomato -p 3000:3000 giri8608/zomato:latest'
             }
         }
@@ -104,7 +125,7 @@ pipeline {
                 """,
                 to: 'giridharan9608@gmail.com',
                 mimeType: 'text/html',
-                attachmentsPattern: 'trivy.txt'
+                attachmentsPattern: 'trivy.txt,docker-scout-cves.txt'
         }
     }
 }
