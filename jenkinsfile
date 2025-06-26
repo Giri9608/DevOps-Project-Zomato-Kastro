@@ -46,7 +46,7 @@ pipeline {
                     // Ensure the report is generated in the correct directory
                     sh '''mkdir -p dependency-check-reports
                         dependency-check --scan ./ --disableYarnAudit --disableNodeAudit --update -n --nvdApiKey ${NVD_API_KEY} \
-                        -o dependency-check-reports -f XML'''
+                        -o dependency-check-reports -f XML || true'''
                     dependencyCheckPublisher pattern: 'dependency-check-reports/dependency-check-report.xml', 
                         failedTotalCritical: 0, failedTotalHigh: 0, failedTotalMedium: 5, failedTotalLow: 10
                 }
