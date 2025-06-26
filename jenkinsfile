@@ -1,7 +1,7 @@
 pipeline {
     agent any
     tools {
-        dependency-check 'dependency-check' // Correct tool type and name
+        dependency-check 'dependency-check' // Ensure this matches the configured tool name
         jdk 'jdk17'
         nodejs 'node24'
     }
