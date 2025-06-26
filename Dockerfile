@@ -1,25 +1,27 @@
-# Build Stage
-FROM node:18.20.3-slim AS build
+# Use Node.js 18 slim as the base image (recommended by SonarQube and stable for your project)
+FROM node:18-slim
+
+# Set working directory inside the container
 WORKDIR /app
-# Copy only package files first to leverage caching
+
+# Copy package.json and package-lock.json for dependency installation
 COPY package*.json ./
-RUN npm install --production
+
+# Install dependencies
+RUN npm install
+
+# Copy the rest of the application code
 COPY . .
+
+# Expose the port the app runs on (default for Create React App is 3000)
+EXPOSE 3000
+
+# Build the React app for production
 RUN npm run build
 
-# Runtime Stage
-FROM node:18.20.3-slim
-WORKDIR /app
-# Create a non-root user
-RUN groupadd -r appgroup && useradd -r -g appgroup appuser
-# Copy built files from the build stage
-COPY --from=build /app/build ./build
-# Switch to non-root user
-USER appuser
-# Expose port (configurable via ENV)
-EXPOSE ${PORT:-3000}
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s \
-  CMD curl -f http://localhost:${PORT:-3000} || exit 1
+# Serve the built app using a simple server (using 'serve' package)
+# Note: 'serve' is installed globally here for simplicity; alternatively, use a custom server
+RUN npm install -g serve
+
 # Command to run the app
-CMD ["npx", "serve", "-s", "build", "-l", "${PORT:-3000}"]
+CMD ["serve", "-s", "build", "-l", "3000"]
