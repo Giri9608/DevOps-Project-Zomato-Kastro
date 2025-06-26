@@ -1,10 +1,10 @@
-# Use Node.js 18 slim as the base image (recommended by SonarQube and stable for your project)
-FROM node:18-slim
+# Use Node.js 16 slim as the base image
+FROM node:16-slim
 
-# Set working directory inside the container
+# Set the working directory
 WORKDIR /app
 
-# Copy package.json and package-lock.json for dependency installation
+# Copy package.json and package-lock.json to the working directory
 COPY package*.json ./
 
 # Install dependencies
@@ -13,15 +13,11 @@ RUN npm install
 # Copy the rest of the application code
 COPY . .
 
-# Expose the port the app runs on (default for Create React App is 3000)
-EXPOSE 3000
-
-# Build the React app for production
+# Build the React app
 RUN npm run build
 
-# Serve the built app using a simple server (using 'serve' package)
-# Note: 'serve' is installed globally here for simplicity; alternatively, use a custom server
-RUN npm install -g serve
+# Expose port 3000 (or the port your app is configured to listen on)
+EXPOSE 3000
 
-# Command to run the app
-CMD ["serve", "-s", "build", "-l", "3000"]
+# Start your Node.js server (assuming it serves the React app)  
+CMD ["npm", "start"]
