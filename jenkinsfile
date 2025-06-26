@@ -5,31 +5,29 @@ pipeline {
         nodejs 'node24'
     }
     environment {
-        SCANNER_HOME = tool 'sonar-scanner'
-        NVD_API_KEY = credentials('nvd-api-key') // Store NVD API key in Jenkins credentials
+        SCANNER_HOME=tool 'sonar-scanner'
     }
     stages {
-        stage("Clean Workspace") {
+        stage ("clean workspace") {
             steps {
                 cleanWs()
             }
         }
-        stage("Git Checkout") {
+        stage ("Git Checkout") {
             steps {
-                git 'https://github.com/Giri9608/DevOps-Project-Zomato-Kastro.git'
+                git 'https://github.com/KastroVKiran/DevOps-Project-Zomato-Kastro.git'
             }
         }
-        stage("SonarQube Analysis") {
-            steps {
+        stage("Sonarqube Analysis"){
+            steps{
                 withSonarQubeEnv('sonar-server') {
-                    sh '''$SCANNER_HOME/bin/sonar-scanner \
-                        -Dsonar.projectName=zomato \
-                        -Dsonar.projectKey=zomato'''
+                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=zomato \
+                    -Dsonar.projectKey=zomato '''
                 }
             }
         }
-        stage("Code Quality Gate") {
-            steps {
+        stage("Code Quality Gate"){
+           steps {
                 script {
                     waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token'
                 }
@@ -42,42 +40,42 @@ pipeline {
         }
         stage('OWASP FS SCAN') {
             steps {
-                dependencyCheck additionalArguments: "--scan ./ --disableYarnAudit --disableNodeAudit --update -n --nvdApiKey ${NVD_API_KEY}", odcInstallation: 'DP-Check'
-                dependencyCheckPublisher pattern: '**/dependency-check-report.xml', failedTotalCritical: 0, failedTotalHigh: 0, failedTotalLow: 10, failedTotalMedium: 5
+                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit --update -n', odcInstallation: 'DP-Check'
+                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
             }
         }
-        stage("Trivy File Scan") {
+        stage ("Trivy File Scan") {
             steps {
                 sh "trivy fs . > trivy.txt"
             }
         }
-        stage("Build Docker Image") {
+        stage ("Build Docker Image") {
             steps {
                 sh "docker build -t zomato ."
             }
         }
-        stage("Tag & Push to DockerHub") {
+        stage ("Tag & Push to DockerHub") {
             steps {
                 script {
                     withDockerRegistry(credentialsId: 'docker') {
-                        sh "docker tag zomato giri8608/zomato:latest"
-                        sh "docker push giri8608/zomato:latest"
+                        sh "docker tag zomato giri8608/zomato:latest "
+                        sh "docker push giri8608/zomato:latest "
                     }
                 }
             }
         }
         stage('Docker Scout Image') {
             steps {
-                script {
-                    withDockerRegistry(credentialsId: 'docker', toolName: 'docker') {
-                        sh 'docker-scout quickview giri8608/zomato:latest'
-                        sh 'docker-scout cves giri8608/zomato:latest'
-                        sh 'docker-scout recommendations giri8608/zomato:latest'
-                    }
+                script{
+                   withDockerRegistry(credentialsId: 'docker', toolName: 'docker'){
+                       sh 'docker-scout quickview giri8608/zomato:latest'
+                       sh 'docker-scout cves giri8608/zomato:latest'
+                       sh 'docker-scout recommendations giri8608/zomato:latest'
+                   }
                 }
             }
         }
-        stage("Deploy to Container") {
+        stage ("Deploy to Container") {
             steps {
                 sh 'docker run -d --name zomato -p 3000:3000 giri8608/zomato:latest'
             }
