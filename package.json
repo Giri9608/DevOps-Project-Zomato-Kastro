@@ -3,18 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@emotion/react": "^11.11.4", // Latest as of 2025
-    "@emotion/styled": "^11.11.5", // Latest as of 2025
-    "@mui/icons-material": "^5.15.18", // Latest as of 2025
-    "@mui/material": "^5.15.18", // Latest as of 2025
-    "@testing-library/jest-dom": "^6.4.8", // Latest as of 2025
-    "@testing-library/react": "^16.0.1", // Latest as of 2025
-    "@testing-library/user-event": "^14.5.2", // Latest as of 2025
-    "react": "^18.3.1", // Latest as of 2025
-    "react-dom": "^18.3.1", // Latest as of 2025
-    "react-scripts": "5.0.1", // Remains pinned; consider upgrading if compatible
-    "sass": "^1.77.8", // Latest as of 2025
-    "web-vitals": "^3.5.2" // Latest as of 2025
+    "@emotion/react": "^11.11.4",
+    "@emotion/styled": "^11.11.5",
+    "@mui/icons-material": "^5.15.18",
+    "@mui/material": "^5.15.18",
+    "@testing-library/jest-dom": "^6.4.8",
+    "@testing-library/react": "^16.0.1",
+    "@testing-library/user-event": "^14.5.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-scripts": "5.0.1",
+    "sass": "^1.77.8",
+    "web-vitals": "^3.5.2"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -41,18 +41,18 @@
     ]
   },
   "resolutions": {
-    "webpack": "^5.76.0", // Override to fix CVE-2023-28154
-    "@babel/traverse": "^7.23.2", // Override to fix CVE-2023-45133
-    "path-to-regexp": "^0.1.12", // Override to fix CVE-2024-52798
-    "http-proxy-middleware": "^2.0.7", // Override to fix CVE-2024-21536
-    "body-parser": "^1.20.3", // Override to fix CVE-2024-45590
-    "semver": "^7.5.2", // Override to fix CVE-2022-25883
-    "json5": "^1.0.2", // Override to fix CVE-2022-46175
-    "ws": "^8.17.1", // Override to fix CVE-2024-37890
-    "braces": "^3.0.3", // Override to fix CVE-2024-4068
-    "nth-check": "^2.0.1", // Override to fix CVE-2021-3803
-    "rollup": "^2.79.2", // Override to fix CVE-2024-47068
-    "webpack-dev-middleware": "^5.3.4", // Override to fix CVE-2024-29180
-    "cross-spawn": "^7.0.5" // Override to fix CVE-2024-21538
+    "webpack": "^5.76.0",
+    "@babel/traverse": "^7.23.2",
+    "path-to-regexp": "^0.1.12",
+    "http-proxy-middleware": "^2.0.7",
+    "body-parser": "^1.20.3",
+    "semver": "^7.5.2",
+    "json5": "^1.0.2",
+    "ws": "^8.17.1",
+    "braces": "^3.0.3",
+    "nth-check": "^2.0.1",
+    "rollup": "^2.79.2",
+    "webpack-dev-middleware": "^5.3.4",
+    "cross-spawn": "^7.0.5"
   }
 }
