@@ -1,7 +1,7 @@
 pipeline {
     agent any
     tools {
-        dependencyCheck 'dependency-check' // Add this if configured
+        dependency-check 'dependency-check' // Corrected tool type
         jdk 'jdk17'
         nodejs 'node24'
     }
