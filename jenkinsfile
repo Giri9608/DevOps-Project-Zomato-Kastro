@@ -40,11 +40,18 @@ pipeline {
         }
         stage('OWASP FS SCAN') {
             steps {
-                script {
-                    withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
-                        dependencyCheck additionalArguments: "--scan ./ --disableYarnAudit --disableNodeAudit --nvdApiKey ${NVD_API_KEY} --update -n", odcInstallation: 'DP-Check'
-                        dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
-                    }
+                withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
+                    sh '''
+                        /var/lib/jenkins/tools/org.jenkinsci.plugins.DependencyCheck.tools.DependencyCheckInstallation/DP-Check/bin/dependency-check.sh \
+                        --scan ./ \
+                        --disableYarnAudit \
+                        --disableNodeAudit \
+                        --nvdApiKey $NVD_API_KEY \
+                        --format XML \
+                        --out . \
+                        --update
+                    '''
+                    dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
                 }
             }
         }
@@ -110,3 +117,4 @@ pipeline {
         }
     }
 }
+
