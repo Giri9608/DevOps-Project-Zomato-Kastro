@@ -1,23 +1,25 @@
-# Use Node.js 16 slim as the base image
-FROM node:18-slim
-
-# Set the working directory
+# Build Stage
+FROM node:18.20.3-slim AS build
 WORKDIR /app
-
-# Copy package.json and package-lock.json to the working directory
+# Copy only package files first to leverage caching
 COPY package*.json ./
-
-# Install dependencies
-RUN npm install
-
-# Copy the rest of the application code
+RUN npm install --production
 COPY . .
-
-# Build the React app
 RUN npm run build
 
-# Expose port 3000 (or the port your app is configured to listen on)
-EXPOSE 3000
-
-# Start your Node.js server (assuming it serves the React app)  
-CMD ["npm", "start"]
+# Runtime Stage
+FROM node:18.20.3-slim
+WORKDIR /app
+# Create a non-root user
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
+# Copy built files from the build stage
+COPY --from=build /app/build ./build
+# Switch to non-root user
+USER appuser
+# Expose port (configurable via ENV)
+EXPOSE ${PORT:-3000}
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s \
+  CMD curl -f http://localhost:${PORT:-3000} || exit 1
+# Command to run the app
+CMD ["npx", "serve", "-s", "build", "-l", "${PORT:-3000}"]
