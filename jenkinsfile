@@ -81,7 +81,13 @@ pipeline {
         }
         stage ("Deploy to Container") {
             steps {
-                sh 'docker run -d --name zomato -p 3000:3000 giri8608/zomato:latest'
+                script {
+                    sh '''
+                        docker stop zomato || true
+                        docker rm zomato || true
+                        docker run -d --name zomato -p 3000:3000 giri8608/zomato:latest
+                    '''
+                }
             }
         }
     }
@@ -110,6 +116,3 @@ pipeline {
         }
     }
 }
-
-
-
