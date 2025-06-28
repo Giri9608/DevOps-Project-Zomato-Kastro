@@ -21,12 +21,8 @@ pipeline {
         stage("Sonarqube Analysis"){
             steps{
                 withSonarQubeEnv('sonar-server') {
-                    sh ''' $SCANNER_HOME/bin/sonar-scanner \
-                    -Dsonar.projectName=zomato \
-                    -Dsonar.projectKey=zomato \
-                    -Dsonar.sources=. \
-                    -Dsonar.host.url=$SONAR_HOST_URL \
-                    -Dsonar.login=$SONAR_AUTH_TOKEN '''
+                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=zomato \
+                    -Dsonar.projectKey=zomato '''
                 }
             }
         }
@@ -45,49 +41,21 @@ pipeline {
         stage('OWASP FS SCAN') {
             steps {
                 script {
-                    try {
-                        withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
-                            dependencyCheck additionalArguments: '''--scan ./
-                                                                   --disableYarnAudit
-                                                                   --disableNodeAudit
-                                                                   --nvdApiKey ${NVD_API_KEY}
-                                                                   --format XML
-                                                                   --format HTML
-                                                                   --out ./dependency-check-report
-                                                                   --project zomato
-                                                                   -n''',
-                                           odcInstallation: 'DP-Check'
-
-                            // Fixed report pattern to match actual output location
-                            dependencyCheckPublisher pattern: 'dependency-check-report/dependency-check-report.xml'
-                        }
-                        echo "✅ OWASP Dependency Check completed successfully"
-                    } catch (Exception e) {
-                        echo "⚠️ OWASP scan completed with warnings - continuing pipeline"
-                        echo "Report generation may have minor issues but security scan was performed"
-                        // Don't fail the pipeline, just log the issue
-                        currentBuild.result = 'SUCCESS'
+                    withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
+                        dependencyCheck additionalArguments: "--scan ./ --disableYarnAudit --disableNodeAudit --nvdApiKey ${NVD_API_KEY} --format XML --format HTML", odcInstallation: 'DP-Check'
+                        dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
                     }
                 }
             }
         }
         stage ("Trivy File Scan") {
             steps {
-                script {
-                    try {
-                        sh "trivy fs . --skip-files dependency-check-report/ > trivy.txt"
-                        echo "✅ Trivy scan completed successfully"
-                    } catch (Exception e) {
-                        echo "⚠️ Trivy scan completed with warnings - continuing pipeline"
-                        sh "echo 'Trivy scan completed with warnings' > trivy.txt"
-                    }
-                }
+                sh "trivy fs . > trivy.txt"
             }
         }
         stage ("Build Docker Image") {
             steps {
                 sh "docker build -t zomato ."
-                echo "✅ Docker image built successfully"
             }
         }
         stage ("Tag & Push to DockerHub") {
@@ -96,7 +64,6 @@ pipeline {
                     withDockerRegistry(credentialsId: 'docker') {
                         sh "docker tag zomato giri8608/zomato:latest "
                         sh "docker push giri8608/zomato:latest "
-                        echo "✅ Docker image pushed to DockerHub successfully"
                     }
                 }
             }
@@ -104,86 +71,35 @@ pipeline {
         stage('Docker Scout Image') {
             steps {
                 script{
-                    try {
-                        withDockerRegistry(credentialsId: 'docker', toolName: 'docker'){
-                            sh 'docker-scout quickview giri8608/zomato:latest'
-                            sh 'docker-scout cves giri8608/zomato:latest'
-                            sh 'docker-scout recommendations giri8608/zomato:latest'
-                            echo "✅ Docker Scout analysis completed successfully"
-                        }
-                    } catch (Exception e) {
-                        echo "⚠️ Docker Scout analysis completed with warnings - continuing pipeline"
-                    }
+                   withDockerRegistry(credentialsId: 'docker', toolName: 'docker'){
+                       sh 'docker-scout quickview giri8608/zomato:latest'
+                       sh 'docker-scout cves giri8608/zomato:latest'
+                       sh 'docker-scout recommendations giri8608/zomato:latest'
+                   }
                 }
             }
         }
         stage ("Deploy to Container") {
             steps {
-                script {
-                    sh '''
-                        docker stop zomato || true
-                        docker rm zomato || true
-                        docker run -d --name zomato -p 3000:3000 giri8608/zomato:latest
-                    '''
-                    echo "✅ Application deployed successfully on port 3000"
-                }
+                sh 'docker run -d --name zomato -p 3000:3000 giri8608/zomato:latest'
             }
         }
     }
     post {
         always {
-            script {
-                // Ensure build result is SUCCESS if not already set
-                if (currentBuild.result == null) {
-                    currentBuild.result = 'SUCCESS'
-                }
-            }
-
-            archiveArtifacts artifacts: 'trivy.txt,dependency-check-report/**/*', allowEmptyArchive: true
-
             emailext attachLog: true,
-                subject: "✅ SUCCESS - Zomato Pipeline Build #${env.BUILD_NUMBER}",
+                subject: "'${currentBuild.result}'",
                 body: """
                     <html>
                     <body>
-                        <div style="background-color: #32CD32; padding: 15px; margin-bottom: 10px; border-radius: 5px;">
-                            <h2 style="color: white; margin: 0; text-align: center;">🎉 BUILD SUCCESS! 🎉</h2>
+                        <div style="background-color: #FFA07A; padding: 10px; margin-bottom: 10px;">
+                            <p style="color: white; font-weight: bold;">Project: ${env.JOB_NAME}</p>
                         </div>
-                        <div style="background-color: #FFA07A; padding: 10px; margin-bottom: 10px; border-radius: 5px;">
-                            <p style="color: white; font-weight: bold; margin: 5px 0;">📋 Project: ${env.JOB_NAME}</p>
+                        <div style="background-color: #90EE90; padding: 10px; margin-bottom: 10px;">
+                            <p style="color: white; font-weight: bold;">Build Number: ${env.BUILD_NUMBER}</p>
                         </div>
-                        <div style="background-color: #90EE90; padding: 10px; margin-bottom: 10px; border-radius: 5px;">
-                            <p style="color: white; font-weight: bold; margin: 5px 0;">🔢 Build Number: ${env.BUILD_NUMBER}</p>
-                        </div>
-                        <div style="background-color: #87CEEB; padding: 10px; margin-bottom: 10px; border-radius: 5px;">
-                            <p style="color: white; font-weight: bold; margin: 5px 0;">🔗 Build URL: ${env.BUILD_URL}</p>
-                        </div>
-                        <div style="background-color: #98FB98; padding: 15px; margin-bottom: 10px; border-radius: 5px;">
-                            <h3 style="color: black; margin: 0 0 10px 0;">🚀 Application Deployed Successfully!</h3>
-                            <p style="color: black; margin: 5px 0; font-size: 16px;">
-                                <strong>Access your Zomato app at:
-                                <a href="http://your-server-ip:3000" style="color: #0066cc;">http://your-server-ip:3000</a></strong>
-                            </p>
-                        </div>
-                        <div style="background-color: #F0F8FF; padding: 15px; margin-bottom: 10px; border-radius: 5px;">
-                            <h3 style="color: black; margin: 0 0 10px 0;">📊 Pipeline Summary:</h3>
-                            <ul style="color: black; margin: 0; padding-left: 20px;">
-                                <li>✅ <strong>SonarQube Analysis:</strong> PASSED</li>
-                                <li>✅ <strong>Code Quality Gate:</strong> OK</li>
-                                <li>✅ <strong>NPM Dependencies:</strong> INSTALLED</li>
-                                <li>✅ <strong>OWASP Security Scan:</strong> COMPLETED</li>
-                                <li>✅ <strong>Trivy Vulnerability Scan:</strong> COMPLETED</li>
-                                <li>✅ <strong>Docker Build:</strong> SUCCESS</li>
-                                <li>✅ <strong>Docker Push:</strong> SUCCESS</li>
-                                <li>✅ <strong>Security Analysis:</strong> COMPLETED</li>
-                                <li>✅ <strong>Deployment:</strong> SUCCESS</li>
-                            </ul>
-                        </div>
-                        <div style="background-color: #FFE4B5; padding: 10px; margin-bottom: 10px; border-radius: 5px;">
-                            <p style="color: black; margin: 5px 0;">
-                                <strong>🔒 Security Status:</strong> All security scans completed successfully.
-                                Check archived reports for detailed vulnerability information.
-                            </p>
+                        <div style="background-color: #87CEEB; padding: 10px; margin-bottom: 10px;">
+                            <p style="color: white; font-weight: bold;">URL: ${env.BUILD_URL}</p>
                         </div>
                     </body>
                     </html>
@@ -191,26 +107,6 @@ pipeline {
                 to: 'giridharan9608@gmail.com',
                 mimeType: 'text/html',
                 attachmentsPattern: 'trivy.txt'
-        }
-        success {
-            echo "🎉🎉🎉 SUCCESS! 🎉🎉🎉"
-            echo "✅ Your Zomato application pipeline completed successfully!"
-            echo "🚀 Application is now deployed and running on port 3000"
-            echo "📊 All security scans completed successfully"
-            echo "🔗 Access your application at: http://your-server-ip:3000"
-            echo "📧 Success notification sent to: giridharan9608@gmail.com"
-        }
-        unstable {
-            script {
-                // Force SUCCESS even if marked as unstable
-                currentBuild.result = 'SUCCESS'
-                echo "⚠️ Build was marked unstable but forcing SUCCESS status"
-                echo "✅ All critical stages completed successfully"
-            }
-        }
-        failure {
-            echo "❌ Pipeline failed. Please check the logs for details."
-            echo "🔍 Check individual stage logs to identify the issue"
         }
     }
 }
